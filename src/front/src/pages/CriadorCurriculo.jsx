@@ -2,6 +2,8 @@ import { useState } from "react";
 import Swal from "sweetalert2";
 import Navbar from "../components/Navbar";
 import { aprimorarTextoComIA } from "../services/cvService";
+import { alertTheme } from "../lib";
+import { Words } from "../components/ui";
 import "./CriadorCurriculo.css";
 
 
@@ -27,25 +29,24 @@ function CriadorCurriculo() {
   // IA
   const aprimorarTexto = async (texto, contexto, onUpdate) => {
     if (!texto.trim()) {
-      return Swal.fire({ icon: "warning", title: "Atenção", text: "Preencha a porra do campo antes." });
+      return Swal.fire(alertTheme({ icon: "warning", title: "Campo vazio", text: "Escreva o texto antes de pedir o aprimoramento." }));
     }
 
-    Swal.fire({ title: "Aprimorando...", allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    Swal.fire(alertTheme({ title: "Aprimorando o texto...", allowOutsideClick: false, showConfirmButton: false, didOpen: () => Swal.showLoading() }));
 
     try {
       const aprimorado = await aprimorarTextoComIA(texto, contexto);
       Swal.close();
       onUpdate(aprimorado);
     } catch {
-      Swal.fire({ icon: "error", title: "Erro", text: "Deu merda na IA." });
+      Swal.fire(alertTheme({ icon: "error", title: "A IA não respondeu", text: "Tente de novo em instantes." }));
     }
   };
 
   // Funções Genéricas para Arrays
   const add = (campo, itemVazio) => setCvData({ ...cvData, [campo]: [...cvData[campo], itemVazio] });
   const update = (campo, index, chave, valor) => {
-    const lista = [...cvData[campo]];
-    lista[index][chave] = valor;
+    const lista = cvData[campo].map((item, i) => (i === index ? { ...item, [chave]: valor } : item));
     setCvData({ ...cvData, [campo]: lista });
   };
   const remove = (campo, index) => setCvData({ ...cvData, [campo]: cvData[campo].filter((_, i) => i !== index) });
@@ -61,13 +62,13 @@ function CriadorCurriculo() {
 
       <div className="cv-creator-container">
         <div className="cv-form-section no-print">
-          <h2>Criador de Currículo</h2>
-          <p>Preencha os dados e acompanhe a pré-visualização ao lado.</p>
+          <Words text="Criar currículo" />
+          <p>Preencha ao lado e veja o documento se montar.</p>
 
           <section className="form-group">
             <h3>Dados Pessoais</h3>
-            <input type="text" name="nome" placeholder="Nome Completo" value={cvData.pessoais.nome} onChange={handlePessoaisChange} />
-            <input type="email" name="email" placeholder="E-mail" value={cvData.pessoais.email} onChange={handlePessoaisChange} />
+            <input type="text" name="nome" placeholder="Nome completo" aria-label="Nome completo" value={cvData.pessoais.nome} onChange={handlePessoaisChange} />
+            <input type="email" name="email" placeholder="Email" aria-label="Email" value={cvData.pessoais.email} onChange={handlePessoaisChange} />
             <input type="text" name="telefone" placeholder="Telefone" value={cvData.pessoais.telefone} onChange={handlePessoaisChange} />
             <input type="text" name="linkedin" placeholder="LinkedIn (URL)" value={cvData.pessoais.linkedin} onChange={handlePessoaisChange} />
           </section>
@@ -80,7 +81,7 @@ function CriadorCurriculo() {
               onChange={(e) => setCvData({ ...cvData, resumo: e.target.value })}
               rows="4"
             />
-            <button className="btn-ai" onClick={() => aprimorarTexto(cvData.resumo, "Resumo Profissional", (novoTexto) => setCvData({ ...cvData, resumo: novoTexto }))}>
+            <button type="button" className="btn-ai" onClick={() => aprimorarTexto(cvData.resumo, "Resumo Profissional", (novoTexto) => setCvData({ ...cvData, resumo: novoTexto }))}>
               Aprimorar com IA
             </button>
           </section>
@@ -94,14 +95,14 @@ function CriadorCurriculo() {
                 <input type="text" placeholder="Período" value={exp.periodo} onChange={(e) => update("experiencias", index, "periodo", e.target.value)} />
                 <textarea placeholder="Descrição" value={exp.descricao} onChange={(e) => update("experiencias", index, "descricao", e.target.value)} rows="3" />
                 <div className="entry-actions">
-                  <button className="btn-ai" onClick={() => aprimorarTexto(exp.descricao, "Cargo: " + exp.cargo, (novoTexto) => update("experiencias", index, "descricao", novoTexto))}>
+                  <button type="button" className="btn-ai" onClick={() => aprimorarTexto(exp.descricao, "Cargo: " + exp.cargo, (novoTexto) => update("experiencias", index, "descricao", novoTexto))}>
                     Aprimorar Descrição
                   </button>
-                  <button className="btn-remove" onClick={() => remove("experiencias", index)}>Remover</button>
+                  <button type="button" className="btn-remove" onClick={() => remove("experiencias", index)}>Remover</button>
                 </div>
               </div>
             ))}
-            <button className="btn-add" onClick={() => add("experiencias", { cargo: "", empresa: "", periodo: "", descricao: "" })}>+ Experiência</button>
+            <button type="button" className="btn-add" onClick={() => add("experiencias", { cargo: "", empresa: "", periodo: "", descricao: "" })}>+ Experiência</button>
           </section>
 
           <section className="form-group">
@@ -111,10 +112,10 @@ function CriadorCurriculo() {
                 <input type="text" placeholder="Curso" value={form.curso} onChange={(e) => update("formacao", index, "curso", e.target.value)} />
                 <input type="text" placeholder="Instituição" value={form.instituicao} onChange={(e) => update("formacao", index, "instituicao", e.target.value)} />
                 <input type="text" placeholder="Período" value={form.periodo} onChange={(e) => update("formacao", index, "periodo", e.target.value)} />
-                <button className="btn-remove" onClick={() => remove("formacao", index)}>Remover</button>
+                <button type="button" className="btn-remove" onClick={() => remove("formacao", index)}>Remover</button>
               </div>
             ))}
-            <button className="btn-add" onClick={() => add("formacao", { curso: "", instituicao: "", periodo: "" })}>+ Formação</button>
+            <button type="button" className="btn-add" onClick={() => add("formacao", { curso: "", instituicao: "", periodo: "" })}>+ Formação</button>
           </section>
 
           <section className="form-group">
@@ -127,10 +128,10 @@ function CriadorCurriculo() {
                   <option value="Intermediário">Intermediário</option>
                   <option value="Avançado">Avançado</option>
                 </select>
-                <button className="btn-remove" onClick={() => remove("habilidades", index)}>Remover</button>
+                <button type="button" className="btn-remove" onClick={() => remove("habilidades", index)}>Remover</button>
               </div>
             ))}
-            <button className="btn-add" onClick={() => add("habilidades", { nome: "", nivel: "básico" })}>+ Habilidade</button>
+            <button type="button" className="btn-add" onClick={() => add("habilidades", { nome: "", nivel: "Básico" })}>+ Habilidade</button>
           </section>
 
           <section className="form-group">
@@ -146,13 +147,13 @@ function CriadorCurriculo() {
                   <option value="C1">C1 - Avançado</option>
                   <option value="C2">C2 - Fluente/Nativo</option>
                 </select>
-                <button className="btn-remove" onClick={() => remove("idiomas", index)}>Remover</button>
+                <button type="button" className="btn-remove" onClick={() => remove("idiomas", index)}>Remover</button>
               </div>
             ))}
-            <button className="btn-add" onClick={() => add("idiomas", { idioma: "", nivel: "A1" })}>+ Idioma</button>
+            <button type="button" className="btn-add" onClick={() => add("idiomas", { idioma: "", nivel: "A1" })}>+ Idioma</button>
           </section>
 
-          <button className="btn-primary btn-print" onClick={imprimir}>Imprimir / Salvar PDF</button>
+          <button type="button" className="btn btn-accent btn-print" onClick={imprimir}>Imprimir / Salvar PDF</button>
         </div>
 
         <div className="cv-preview-section">

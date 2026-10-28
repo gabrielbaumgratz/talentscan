@@ -3,4 +3,6 @@ node_modules
 dist
 build
 .vscode
-uploads/
+uploads/.taste-skill/
+.claude/
+src/backend/uploads/

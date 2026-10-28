@@ -1,18 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import Swal from "sweetalert2";
-import {
-  AlertCircle,
-  BarChart3,
-  Briefcase,
-  CheckCircle,
-  FileText,
-  Lightbulb,
-  Loader2,
-  SearchCheck,
-  Sparkles,
-  Target,
-  UploadCloud
-} from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import {
@@ -22,6 +10,8 @@ import {
   buscarCurriculos,
   gerarVaga
 } from "../services/compatibilidadeService";
+import { getUser, alertTheme } from "../lib";
+import { Words } from "../components/ui";
 import "./ClassificacaoCompatibilidade.css";
 
 const areas = [
@@ -43,31 +33,25 @@ const areas = [
 
 const niveis = ["Estágio", "Júnior", "Pleno", "Sênior"];
 
-function Lista({ itens }) {
-  if (!itens?.length) {
-    return <p className="cc-empty">Nenhum item identificado.</p>;
-  }
-
+function Lista({ titulo, itens, tipo }) {
   return (
-    <ul className="cc-list">
-      {itens.map((item, index) => (
-        <li key={`${item}-${index}`}>{item}</li>
-      ))}
-    </ul>
+    <section className={`cc-card ${tipo || ""}`}>
+      <h3>{titulo}</h3>
+      {itens?.length ? (
+        <ul>{itens.map((item, i) => <li key={`${item}-${i}`}>{item}</li>)}</ul>
+      ) : (
+        <p className="muted">Nada identificado.</p>
+      )}
+    </section>
   );
 }
 
-function CardLista({ titulo, icon, itens, tipo = "blue" }) {
-  const Icone = icon;
-
+function Campo({ id, label, children }) {
   return (
-    <section className={`cc-card cc-card-${tipo}`}>
-      <div className="cc-card-header">
-        <Icone size={20} />
-        <h3>{titulo}</h3>
-      </div>
-      <Lista itens={itens} />
-    </section>
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      {children}
+    </div>
   );
 }
 
@@ -83,10 +67,7 @@ function ClassificacaoCompatibilidade() {
   const [loadingClassificacao, setLoadingClassificacao] = useState(false);
   const [loadingVaga, setLoadingVaga] = useState(false);
   const [loadingCompatibilidade, setLoadingCompatibilidade] = useState(false);
-  const [vagaGeradaForm, setVagaGeradaForm] = useState({
-    area: "Desenvolvimento Front-end",
-    nivel: "Júnior"
-  });
+  const [vagaGeradaForm, setVagaGeradaForm] = useState({ area: "Desenvolvimento Front-end", nivel: "Júnior" });
   const [vagaPersonalizada, setVagaPersonalizada] = useState({
     titulo: "",
     descricao: "",
@@ -96,42 +77,28 @@ function ClassificacaoCompatibilidade() {
     nivel: ""
   });
 
-  const user = useMemo(() => {
-    const storedUser = localStorage.getItem("user");
-    return storedUser ? JSON.parse(storedUser) : null;
-  }, []);
+  const user = useMemo(() => getUser(), []);
 
   useEffect(() => {
-    async function carregarDados() {
-      if (!user?._id) return;
+    if (!user?._id) return;
 
-      try {
-        const [historicoCurriculos, historicoClassificacoes] = await Promise.all([
-          buscarCurriculos(user._id),
-          buscarClassificacoes(user._id)
-        ]);
-
-        setCurriculos(Array.isArray(historicoCurriculos) ? historicoCurriculos : []);
-        setClassificacoes(Array.isArray(historicoClassificacoes) ? historicoClassificacoes : []);
-      } catch (erro) {
-        console.error(erro);
-      }
-    }
-
-    carregarDados();
+    Promise.all([buscarCurriculos(user._id), buscarClassificacoes(user._id)])
+      .then(([hc, hcl]) => {
+        setCurriculos(Array.isArray(hc) ? hc : []);
+        setClassificacoes(Array.isArray(hcl) ? hcl : []);
+      })
+      .catch((erro) => console.error(erro));
   }, [user?._id]);
 
   const pontuacao = classificacao?.pontuacaoGeral || 0;
   const porcentagem = compatibilidade?.porcentagemCompatibilidade || 0;
-  const nivelMatch = porcentagem >= 75 ? "alto" : porcentagem >= 50 ? "medio" : "baixo";
+
+  const aviso = (title, text) => Swal.fire(alertTheme({ icon: "warning", title, text }));
+  const falha = (erro, padrao) => Swal.fire(alertTheme({ icon: "error", title: "Algo falhou", text: erro.message || padrao }));
 
   async function handleClassificar() {
-    if (!user?._id) {
-      return Swal.fire("Login necessário", "Entre na sua conta para salvar o histórico.", "warning");
-    }
-
     if (!curriculoId && !arquivo) {
-      return Swal.fire("Currículo obrigatório", "Selecione um currículo do histórico ou envie um arquivo.", "warning");
+      return aviso("Falta o currículo", "Escolha um currículo do histórico ou envie um arquivo.");
     }
 
     const formData = new FormData();
@@ -144,58 +111,39 @@ function ClassificacaoCompatibilidade() {
       setCompatibilidade(null);
 
       const data = await analisarClassificacao(formData);
-      if (data.erro) throw new Error(data.erro);
-
       setClassificacao(data.classificacao);
 
       const historico = await buscarClassificacoes(user._id);
       setClassificacoes(Array.isArray(historico) ? historico : []);
     } catch (erro) {
-      Swal.fire("Erro", erro.message || "Não foi possível classificar o currículo.", "error");
+      falha(erro, "Não foi possível classificar o currículo.");
     } finally {
       setLoadingClassificacao(false);
     }
   }
 
   async function handleGerarVaga() {
-    if (!user?._id) {
-      return Swal.fire("Login necessário", "Entre na sua conta para gerar vagas.", "warning");
-    }
-
     try {
       setLoadingVaga(true);
-      const data = await gerarVaga({
-        userId: user._id,
-        area: vagaGeradaForm.area,
-        nivel: vagaGeradaForm.nivel
-      });
-
-      if (data.erro) throw new Error(data.erro);
-
+      const data = await gerarVaga({ userId: user._id, area: vagaGeradaForm.area, nivel: vagaGeradaForm.nivel });
       setVaga(data.vaga);
       setModoVaga("gerada");
     } catch (erro) {
-      Swal.fire("Erro", erro.message || "Não foi possível gerar a vaga.", "error");
+      falha(erro, "Não foi possível gerar a vaga.");
     } finally {
       setLoadingVaga(false);
     }
   }
 
   async function handleCompatibilidade() {
-    if (!user?._id) {
-      return Swal.fire("Login necessário", "Entre na sua conta para salvar a análise.", "warning");
-    }
-
     if (!classificacao?._id) {
-      return Swal.fire("Classificação obrigatória", "Analise o currículo antes de comparar com a vaga.", "warning");
+      return aviso("Classifique primeiro", "Analise o currículo antes de comparar com uma vaga.");
     }
-
     if (modoVaga === "gerada" && !vaga?._id) {
-      return Swal.fire("Vaga obrigatória", "Gere uma vaga ou use a opção de vaga personalizada.", "warning");
+      return aviso("Falta a vaga", "Gere uma vaga ou use a opção de vaga real.");
     }
-
     if (modoVaga === "personalizada" && !vagaPersonalizada.descricao.trim()) {
-      return Swal.fire("Vaga obrigatória", "Cole a descrição completa da vaga personalizada.", "warning");
+      return aviso("Falta a vaga", "Cole a descrição completa da vaga.");
     }
 
     try {
@@ -206,225 +154,187 @@ function ClassificacaoCompatibilidade() {
         vagaId: modoVaga === "gerada" ? vaga?._id : undefined,
         vagaPersonalizada: modoVaga === "personalizada" ? vagaPersonalizada : undefined
       });
-
-      if (data.erro) throw new Error(data.erro);
-
       setCompatibilidade(data.compatibilidade);
     } catch (erro) {
-      Swal.fire("Erro", erro.message || "Não foi possível analisar a compatibilidade.", "error");
+      falha(erro, "Não foi possível analisar a compatibilidade.");
     } finally {
       setLoadingCompatibilidade(false);
     }
   }
 
+  const setVP = (campo) => (e) => setVagaPersonalizada({ ...vagaPersonalizada, [campo]: e.target.value });
+
+  if (!user) {
+    return (
+      <>
+        <Navbar />
+        <main>
+          <header className="page-title">
+            <Words text="Entre para comparar com vagas" />
+            <p>A classificação e as vagas ficam salvas na sua conta.</p>
+            <p style={{ marginTop: 24 }}><Link to="/login" className="btn">Entrar</Link></p>
+          </header>
+        </main>
+        <Footer />
+      </>
+    );
+  }
+
   return (
-    <div className="cc-page">
+    <>
       <Navbar />
 
-      <main className="cc-container">
-        <header className="cc-title">
-          <span>TalentScan IA</span>
-          <h1>Classificação e Compatibilidade</h1>
-          <p>Classifique o perfil profissional do candidato e use essa análise como base para comparar o currículo com uma vaga.</p>
+      <main>
+        <header className="page-title">
+          <Words text="Seu perfil contra uma vaga" />
+          <p>Primeiro a IA classifica seu currículo. Depois compara com a vaga que você escolher.</p>
         </header>
 
-        <section className="cc-layout">
-          <div className="cc-panel">
-            <div className="cc-panel-title">
-              <FileText size={22} />
-              <div>
-                <h2>Currículo</h2>
-                <p>Selecione do histórico ou envie um novo PDF/DOCX.</p>
-              </div>
-            </div>
-
-            <label>Currículo do histórico</label>
-            <select value={curriculoId} onChange={(e) => { setCurriculoId(e.target.value); setArquivo(null); }}>
-              <option value="">Selecionar currículo</option>
-              {curriculos.map((item) => (
-                <option key={item._id} value={item._id}>
-                  {item.nomeArquivo} - {item.analise?.nota || 0}/100
-                </option>
-              ))}
-            </select>
-
-            <label>Novo currículo</label>
-            <div className="cc-file">
-              <UploadCloud size={20} />
-              <input
-                type="file"
-                accept=".pdf,.docx"
-                onChange={(e) => {
-                  setArquivo(e.target.files[0]);
-                  setCurriculoId("");
-                }}
-              />
-            </div>
-
-            {arquivo && <small className="cc-muted">{arquivo.name}</small>}
-
-            <button className="cc-btn cc-btn-primary" onClick={handleClassificar} disabled={loadingClassificacao}>
-              {loadingClassificacao ? <Loader2 className="cc-spin" size={18} /> : <SearchCheck size={18} />}
-              Analisar classificação
-            </button>
-          </div>
-
-          <div className="cc-panel">
-            <div className="cc-panel-title">
-              <BarChart3 size={22} />
-              <div>
-                <h2>Histórico</h2>
-                <p>Classificações salvas por usuário.</p>
-              </div>
-            </div>
-
-            <div className="cc-history">
-              {classificacoes.length === 0 && <p className="cc-empty">Nenhuma classificação encontrada.</p>}
-              {classificacoes.slice(0, 5).map((item) => (
-                <button key={item._id} onClick={() => setClassificacao(item)}>
-                  <strong>{item.areaPrincipal}</strong>
-                  <span>{item.nomeArquivo || "Currículo"}</span>
-                  <small>{item.pontuacaoGeral}/100</small>
+        <div className="page-body cc-flow">
+          <section className="cc-step" aria-labelledby="s1">
+            <h2 id="s1">1. Classificar o currículo</h2>
+            <div className="cc-cols">
+              <div className="panel cc-form">
+                <Campo id="hist" label="Currículo do histórico">
+                  <select id="hist" value={curriculoId} onChange={(e) => { setCurriculoId(e.target.value); setArquivo(null); }}>
+                    <option value="">Selecionar</option>
+                    {curriculos.map((item) => (
+                      <option key={item._id} value={item._id}>
+                        {item.nomeArquivo} · {item.analise?.nota ?? 0}/100
+                      </option>
+                    ))}
+                  </select>
+                </Campo>
+                <Campo id="novo" label="Ou enviar um novo (PDF ou DOCX)">
+                  <input id="novo" type="file" accept=".pdf,.docx"
+                    onChange={(e) => { setArquivo(e.target.files[0] || null); setCurriculoId(""); }} />
+                </Campo>
+                <button type="button" className="btn" onClick={handleClassificar} disabled={loadingClassificacao}>
+                  {loadingClassificacao ? "Classificando..." : "Classificar"}
                 </button>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {classificacao && (
-          <section className="cc-panel cc-result">
-            <div className="cc-result-head">
-              <div>
-                <span>Resultado da classificação</span>
-                <h2>{classificacao.areaPrincipal}</h2>
-                <p>{classificacao.resumoProfissional}</p>
               </div>
-              <div className="cc-score">
-                <strong>{pontuacao}</strong>
-                <small>/100</small>
+
+              <div className="cc-recent">
+                <h3>Classificações recentes</h3>
+                {classificacoes.length === 0 && <p className="muted">Nenhuma ainda.</p>}
+                {classificacoes.slice(0, 5).map((item) => (
+                  <button key={item._id} type="button" onClick={() => setClassificacao(item)}>
+                    <span>
+                      <strong>{item.areaPrincipal}</strong>
+                      <small>{item.nomeArquivo || "Currículo"}</small>
+                    </span>
+                    <b>{item.pontuacaoGeral}</b>
+                  </button>
+                ))}
               </div>
-            </div>
-
-            <div className="cc-summary">
-              <div><span>Nível</span><strong>{classificacao.nivelProfissional}</strong></div>
-              <div><span>Arquivo</span><strong>{classificacao.nomeArquivo || "Currículo"}</strong></div>
-              <div><span>Base da comparação</span><strong>Classificação salva</strong></div>
-            </div>
-
-            <div className="cc-grid">
-              <CardLista titulo="Tecnologias principais" icon={Sparkles} itens={classificacao.tecnologiasPrincipais} />
-              <CardLista titulo="Hard skills" icon={Target} itens={classificacao.hardSkills} tipo="green" />
-              <CardLista titulo="Soft skills" icon={CheckCircle} itens={classificacao.softSkills} tipo="yellow" />
-              <CardLista titulo="Pontos fortes" icon={Briefcase} itens={classificacao.pontosFortes} tipo="green" />
-              <CardLista titulo="Pontos fracos" icon={AlertCircle} itens={classificacao.pontosFracos} tipo="red" />
-              <CardLista titulo="Sugestões de melhoria" icon={Lightbulb} itens={classificacao.sugestoesMelhoria} />
             </div>
           </section>
-        )}
 
-        <section className="cc-panel">
-          <div className="cc-panel-title">
-            <Briefcase size={22} />
-            <div>
-              <h2>Vaga</h2>
-              <p>Gere uma vaga com IA ou cole uma vaga real.</p>
-            </div>
-          </div>
-
-          <div className="cc-tabs">
-            <button className={modoVaga === "gerada" ? "active" : ""} onClick={() => setModoVaga("gerada")}>Gerar vaga</button>
-            <button className={modoVaga === "personalizada" ? "active" : ""} onClick={() => setModoVaga("personalizada")}>Vaga real</button>
-          </div>
-
-          {modoVaga === "gerada" ? (
-            <>
-              <div className="cc-form-grid">
+          {classificacao && (
+            <section className="cc-result" aria-labelledby="r1">
+              <div className="cc-head">
+                <div className="cc-big accent"><strong>{pontuacao}</strong><span>/100</span></div>
                 <div>
-                  <label>Área desejada</label>
-                  <select value={vagaGeradaForm.area} onChange={(e) => setVagaGeradaForm({ ...vagaGeradaForm, area: e.target.value })}>
-                    {areas.map((area) => <option key={area}>{area}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label>Nível desejado</label>
-                  <select value={vagaGeradaForm.nivel} onChange={(e) => setVagaGeradaForm({ ...vagaGeradaForm, nivel: e.target.value })}>
-                    {niveis.map((nivel) => <option key={nivel}>{nivel}</option>)}
-                  </select>
+                  <h2 id="r1">{classificacao.areaPrincipal}</h2>
+                  <p className="cc-level">{classificacao.nivelProfissional} · {classificacao.nomeArquivo || "Currículo"}</p>
+                  <p>{classificacao.resumoProfissional}</p>
                 </div>
               </div>
-              <button className="cc-btn cc-btn-secondary" onClick={handleGerarVaga} disabled={loadingVaga}>
-                {loadingVaga ? <Loader2 className="cc-spin" size={18} /> : <Sparkles size={18} />}
-                Gerar vaga com IA
-              </button>
-
-              {vaga && (
-                <div className="cc-job">
-                  <h3>{vaga.titulo}</h3>
-                  <p>{vaga.descricao}</p>
-                  <div className="cc-grid">
-                    <CardLista titulo="Responsabilidades" icon={Briefcase} itens={vaga.responsabilidades} />
-                    <CardLista titulo="Requisitos obrigatórios" icon={Target} itens={vaga.requisitosObrigatorios} tipo="green" />
-                    <CardLista titulo="Requisitos desejáveis" icon={Lightbulb} itens={vaga.requisitosDesejaveis} tipo="yellow" />
-                    <CardLista titulo="Tecnologias" icon={Sparkles} itens={vaga.tecnologias} />
-                  </div>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="cc-custom">
-              <input placeholder="Título da vaga" value={vagaPersonalizada.titulo} onChange={(e) => setVagaPersonalizada({ ...vagaPersonalizada, titulo: e.target.value })} />
-              <textarea placeholder="Descrição completa da vaga" rows="6" value={vagaPersonalizada.descricao} onChange={(e) => setVagaPersonalizada({ ...vagaPersonalizada, descricao: e.target.value })} />
-              <div className="cc-form-grid">
-                <textarea placeholder="Requisitos" rows="4" value={vagaPersonalizada.requisitos} onChange={(e) => setVagaPersonalizada({ ...vagaPersonalizada, requisitos: e.target.value })} />
-                <textarea placeholder="Responsabilidades" rows="4" value={vagaPersonalizada.responsabilidades} onChange={(e) => setVagaPersonalizada({ ...vagaPersonalizada, responsabilidades: e.target.value })} />
-                <textarea placeholder="Tecnologias" rows="4" value={vagaPersonalizada.tecnologias} onChange={(e) => setVagaPersonalizada({ ...vagaPersonalizada, tecnologias: e.target.value })} />
-                <input placeholder="Nível da vaga" value={vagaPersonalizada.nivel} onChange={(e) => setVagaPersonalizada({ ...vagaPersonalizada, nivel: e.target.value })} />
+              <div className="cc-grid">
+                <Lista titulo="Tecnologias" itens={classificacao.tecnologiasPrincipais} />
+                <Lista titulo="Hard skills" itens={classificacao.hardSkills} />
+                <Lista titulo="Soft skills" itens={classificacao.softSkills} />
+                <Lista titulo="Pontos fortes" itens={classificacao.pontosFortes} tipo="good" />
+                <Lista titulo="Pontos fracos" itens={classificacao.pontosFracos} tipo="bad" />
+                <Lista titulo="Sugestões" itens={classificacao.sugestoesMelhoria} />
               </div>
-            </div>
+            </section>
           )}
 
-          <button className="cc-btn cc-btn-primary" onClick={handleCompatibilidade} disabled={loadingCompatibilidade}>
-            {loadingCompatibilidade ? <Loader2 className="cc-spin" size={18} /> : <Target size={18} />}
-            Analisar compatibilidade
-          </button>
-        </section>
+          <section className="cc-step" aria-labelledby="s2">
+            <h2 id="s2">2. Escolher a vaga</h2>
 
-        {compatibilidade && (
-          <section className="cc-panel cc-result">
-            <div className="cc-result-head">
-              <div>
-                <span>Resultado da compatibilidade</span>
-                <h2>Compatibilidade currículo x vaga</h2>
-                <p>{compatibilidade.justificativaNota}</p>
-              </div>
-              <div className={`cc-match cc-match-${nivelMatch}`}>
-                <strong>{porcentagem}%</strong>
-              </div>
+            <div className="cc-tabs" role="group" aria-label="Origem da vaga">
+              <button type="button" aria-pressed={modoVaga === "gerada"} onClick={() => setModoVaga("gerada")}>Gerar com IA</button>
+              <button type="button" aria-pressed={modoVaga === "personalizada"} onClick={() => setModoVaga("personalizada")}>Colar uma vaga real</button>
             </div>
 
-            <div className="cc-progress">
-              <div style={{ width: `${porcentagem}%` }} />
-            </div>
-
-            <div className="cc-grid">
-              <CardLista titulo="Pontos compatíveis" icon={CheckCircle} itens={compatibilidade.pontosCompativeis} tipo="green" />
-              <CardLista titulo="Pontos ausentes" icon={AlertCircle} itens={compatibilidade.pontosAusentes} tipo="red" />
-              <CardLista titulo="Parcialmente compatíveis" icon={Target} itens={compatibilidade.pontosParcialmenteCompativeis} tipo="yellow" />
-              <section className="cc-card cc-wide">
-                <div className="cc-card-header">
-                  <Briefcase size={20} />
-                  <h3>Recomendação final</h3>
+            {modoVaga === "gerada" ? (
+              <div className="panel cc-form">
+                <div className="cc-two">
+                  <Campo id="area" label="Área">
+                    <select id="area" value={vagaGeradaForm.area} onChange={(e) => setVagaGeradaForm({ ...vagaGeradaForm, area: e.target.value })}>
+                      {areas.map((a) => <option key={a}>{a}</option>)}
+                    </select>
+                  </Campo>
+                  <Campo id="nivel" label="Nível">
+                    <select id="nivel" value={vagaGeradaForm.nivel} onChange={(e) => setVagaGeradaForm({ ...vagaGeradaForm, nivel: e.target.value })}>
+                      {niveis.map((n) => <option key={n}>{n}</option>)}
+                    </select>
+                  </Campo>
                 </div>
-                <p>{compatibilidade.recomendacaoFinal}</p>
-              </section>
-              <CardLista titulo="Sugestões para o currículo" icon={Lightbulb} itens={compatibilidade.sugestoesMelhoria} />
-            </div>
+                <button type="button" className="btn btn-quiet" onClick={handleGerarVaga} disabled={loadingVaga}>
+                  {loadingVaga ? "Gerando..." : "Gerar vaga"}
+                </button>
+              </div>
+            ) : (
+              <div className="panel cc-form">
+                <Campo id="vt" label="Título da vaga"><input id="vt" value={vagaPersonalizada.titulo} onChange={setVP("titulo")} /></Campo>
+                <Campo id="vd" label="Descrição completa"><textarea id="vd" rows="6" value={vagaPersonalizada.descricao} onChange={setVP("descricao")} /></Campo>
+                <div className="cc-two">
+                  <Campo id="vr" label="Requisitos"><textarea id="vr" rows="4" value={vagaPersonalizada.requisitos} onChange={setVP("requisitos")} /></Campo>
+                  <Campo id="vres" label="Responsabilidades"><textarea id="vres" rows="4" value={vagaPersonalizada.responsabilidades} onChange={setVP("responsabilidades")} /></Campo>
+                  <Campo id="vtec" label="Tecnologias"><textarea id="vtec" rows="4" value={vagaPersonalizada.tecnologias} onChange={setVP("tecnologias")} /></Campo>
+                  <Campo id="vn" label="Nível da vaga"><input id="vn" value={vagaPersonalizada.nivel} onChange={setVP("nivel")} /></Campo>
+                </div>
+              </div>
+            )}
+
+            {modoVaga === "gerada" && vaga && (
+              <div className="cc-job">
+                <h3>{vaga.titulo}</h3>
+                <p>{vaga.descricao}</p>
+                <div className="cc-grid">
+                  <Lista titulo="Responsabilidades" itens={vaga.responsabilidades} />
+                  <Lista titulo="Requisitos obrigatórios" itens={vaga.requisitosObrigatorios} />
+                  <Lista titulo="Desejáveis" itens={vaga.requisitosDesejaveis} />
+                  <Lista titulo="Tecnologias" itens={vaga.tecnologias} />
+                </div>
+              </div>
+            )}
+
+            <button type="button" className="btn btn-accent cc-go" onClick={handleCompatibilidade} disabled={loadingCompatibilidade}>
+              {loadingCompatibilidade ? "Comparando..." : "Comparar currículo e vaga"}
+            </button>
           </section>
-        )}
+
+          {compatibilidade && (
+            <section className="cc-result" aria-labelledby="r2">
+              <div className="cc-head">
+                <div className="cc-big dark"><strong>{porcentagem}</strong><span>%</span></div>
+                <div>
+                  <h2 id="r2">Compatibilidade</h2>
+                  <p>{compatibilidade.justificativaNota}</p>
+                  <div className="bar cc-bar" aria-hidden="true"><span style={{ width: `${porcentagem}%` }} /></div>
+                </div>
+              </div>
+              <div className="cc-grid">
+                <Lista titulo="Bate com a vaga" itens={compatibilidade.pontosCompativeis} tipo="good" />
+                <Lista titulo="Falta" itens={compatibilidade.pontosAusentes} tipo="bad" />
+                <Lista titulo="Parcialmente" itens={compatibilidade.pontosParcialmenteCompativeis} />
+                <section className="cc-card cc-wide">
+                  <h3>Recomendação final</h3>
+                  <p>{compatibilidade.recomendacaoFinal}</p>
+                </section>
+                <Lista titulo="Ajustes no currículo" itens={compatibilidade.sugestoesMelhoria} />
+              </div>
+            </section>
+          )}
+        </div>
       </main>
 
       <Footer />
-    </div>
+    </>
   );
 }
 

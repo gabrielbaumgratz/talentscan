@@ -1,330 +1,121 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
+import Report from "../components/Report";
+import { Reveal } from "../components/ui";
+import { buscarCurriculos } from "../services/compatibilidadeService";
+import { getUser } from "../lib";
+import { Words } from "../components/ui";
 import "./Historico.css";
 
+const FAIXAS = {
+  todas: () => true,
+  alta: (n) => n >= 75,
+  media: (n) => n >= 50 && n < 75,
+  baixa: (n) => n < 50
+};
+
+const formatarData = (iso) =>
+  iso ? new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }) : "";
+
 function Historico() {
+  const user = getUser();
+  const [itens, setItens] = useState([]);
+  const [loading, setLoading] = useState(Boolean(user?._id));
+  const [error, setError] = useState("");
+  const [busca, setBusca] = useState("");
+  const [faixa, setFaixa] = useState("todas");
+  const [aberto, setAberto] = useState(null);
+
+  useEffect(() => {
+    if (!user?._id) return;
+    buscarCurriculos(user._id)
+      .then((lista) => setItens(Array.isArray(lista) ? lista : []))
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [user?._id]);
+
+  const filtrados = useMemo(
+    () =>
+      itens.filter(
+        (i) =>
+          i.nomeArquivo?.toLowerCase().includes(busca.trim().toLowerCase()) &&
+          FAIXAS[faixa](i.analise?.nota ?? 0)
+      ),
+    [itens, busca, faixa]
+  );
+
   return (
-    <div className="historico-page">
+    <>
+      <Navbar />
 
-      {/* HEADER */}
-      <header className="historico-header">
-        <div className="logo">TalentScan</div>
+      <main>
+        <header className="page-title">
+          <Words text="Histórico" />
+          <p>Todos os currículos que você já analisou.</p>
+        </header>
 
-        <nav className="historico-nav">
-          <a href="#">Home</a>
-          <a href="#">Dashboard</a>
-          <a href="#" className="active">Histórico</a>
-          <a href="#">Perfil</a>
-        </nav>
+        <div className="page-body">
+          {!user && <p>Entre na sua conta para ver o histórico. <Link to="/login">Entrar</Link></p>}
+          {user && loading && <p>Carregando...</p>}
+          {error && <p role="alert" style={{ color: "var(--bad)" }}>{error}</p>}
 
-        <button className="btn-logout">Sair</button>
-      </header>
+          {user && !loading && !error && itens.length === 0 && (
+            <div className="panel hist-empty">
+              <h2>Nenhuma análise ainda</h2>
+              <p>Envie um currículo e ele aparece aqui com a nota e as sugestões.</p>
+              <Link to="/dashboard" className="btn btn-accent">Analisar um currículo</Link>
+            </div>
+          )}
 
-      {/* MAIN */}
-      <main className="historico-main">
+          {itens.length > 0 && (
+            <>
+              <div className="hist-filters">
+                <div className="field">
+                  <label htmlFor="busca">Buscar por nome do arquivo</label>
+                  <input id="busca" type="search" value={busca} onChange={(e) => setBusca(e.target.value)} />
+                </div>
+                <div className="field">
+                  <label htmlFor="faixa">Nota</label>
+                  <select id="faixa" value={faixa} onChange={(e) => setFaixa(e.target.value)}>
+                    <option value="todas">Todas</option>
+                    <option value="alta">75 ou mais</option>
+                    <option value="media">50 a 74</option>
+                    <option value="baixa">Abaixo de 50</option>
+                  </select>
+                </div>
+              </div>
 
-        {/* TITLE + ACTIONS */}
-        <div className="page-title">
-          <div>
-            <h1>📌 Histórico de Análises</h1>
-            <p>Acompanhe suas análises anteriores, veja sua evolução e revise relatórios antigos.</p>
-          </div>
-
-          <div className="actions-top">
-            <button className="btn btn-primary">➕ Nova Análise</button>
-            <button className="btn btn-outline">📥 Exportar Histórico</button>
-            <button className="btn btn-outline">⭐ Mostrar Favoritos</button>
-            <button className="btn btn-danger">🧹 Limpar Histórico</button>
-          </div>
+              <ul className="hist-list">
+                {filtrados.map((item, idx) => {
+                  const nota = item.analise?.nota ?? 0;
+                  const open = aberto === item._id;
+                  return (
+                    <Reveal as="li" key={item._id} className={open ? "open" : ""} delay={Math.min(idx, 8) * 0.05} y={18}>
+                      <button
+                        type="button"
+                        className="hist-row"
+                        aria-expanded={open}
+                        onClick={() => setAberto(open ? null : item._id)}
+                      >
+                        <span className="hist-name">{item.nomeArquivo}</span>
+                        <span className="hist-date">{formatarData(item.data)}</span>
+                        <strong className="hist-score">{nota}</strong>
+                      </button>
+                      {open && <div className="hist-report"><Report analise={item.analise} /></div>}
+                    </Reveal>
+                  );
+                })}
+                {filtrados.length === 0 && <li className="muted hist-none">Nenhum resultado para esse filtro.</li>}
+              </ul>
+            </>
+          )}
         </div>
-
-        <section className="card">
-          <h2>📈 Evolução de Pontuação</h2>
-          <small>Visualize seu progresso ao longo do tempo.</small>
-
-          <div className="evolution">
-            <div>
-              <div className="bar" style={{ height: "60px" }}>
-                <span>62</span>
-              </div>
-              <div className="bar-label">10/03</div>
-            </div>
-
-            <div>
-              <div className="bar" style={{ height: "75px" }}>
-                <span>70</span>
-              </div>
-              <div className="bar-label">20/03</div>
-            </div>
-
-            <div>
-              <div className="bar" style={{ height: "82px" }}>
-                <span>78</span>
-              </div>
-              <div className="bar-label">30/03</div>
-            </div>
-
-            <div>
-              <div className="bar" style={{ height: "92px" }}>
-                <span>85</span>
-              </div>
-              <div className="bar-label">05/04</div>
-            </div>
-
-            <div>
-              <div className="bar" style={{ height: "100px" }}>
-                <span>92</span>
-              </div>
-              <div className="bar-label">06/04</div>
-            </div>
-          </div>
-        </section>
-
-        <section className="card">
-          <h2>🔎 Buscar e Filtrar Análises</h2>
-          <small>Encontre análises antigas por nome, data, pontuação ou status.</small>
-
-          <div className="filters-grid">
-            <div className="field">
-              <label htmlFor="search">Pesquisar análise</label>
-              <input
-                id="search"
-                type="text"
-                placeholder="Digite nome do arquivo, área ou vaga..."
-              />
-            </div>
-
-            <div className="field">
-              <label htmlFor="date">Filtro por Data</label>
-              <select id="date">
-                <option>Todas</option>
-                <option>Hoje</option>
-                <option>Últimos 7 dias</option>
-                <option>Últimos 30 dias</option>
-                <option>Personalizado</option>
-              </select>
-            </div>
-
-            <div className="field">
-              <label htmlFor="score">Filtro por Pontuação</label>
-              <select id="score">
-                <option>Todas</option>
-                <option>0 a 50</option>
-                <option>51 a 70</option>
-                <option>71 a 90</option>
-                <option>91 a 100</option>
-              </select>
-            </div>
-
-            <div className="field">
-              <label htmlFor="type">Tipo de Currículo</label>
-              <select id="type">
-                <option>Todos</option>
-                <option>Estágio</option>
-                <option>Júnior</option>
-                <option>Pleno</option>
-                <option>Sênior</option>
-              </select>
-            </div>
-
-            <div className="field">
-              <label htmlFor="status">Status</label>
-              <select id="status">
-                <option>Todos</option>
-                <option>Completo</option>
-                <option>Em processamento</option>
-                <option>Erro</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="filter-buttons">
-            <button className="btn btn-primary">Pesquisar</button>
-            <button className="btn btn-outline">Aplicar Filtros</button>
-            <button className="btn btn-outline">Limpar Filtros</button>
-          </div>
-        </section>
-
-        {/* TABLE CARD */}
-        <section className="card">
-          <div className="table-header">
-            <div>
-              <h2>📄 Lista de Análises</h2>
-              <small>Selecione análises para comparar ou excluir em lote.</small>
-            </div>
-
-            <div className="bulk-actions">
-              <button className="btn btn-outline">📊 Comparar Selecionados</button>
-              <button className="btn btn-outline">⬇️ Baixar Selecionados</button>
-              <button className="btn btn-danger">🗑️ Excluir Selecionados</button>
-            </div>
-          </div>
-
-          <table>
-            <thead>
-              <tr>
-                <th><input type="checkbox" /></th>
-                <th>Data</th>
-                <th>Arquivo</th>
-                <th>Tipo</th>
-                <th>Área</th>
-                <th>Pontuação</th>
-                <th>Status</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td>06/04/2026</td>
-                <td>curriculo_andre_v3.pdf</td>
-                <td>Júnior</td>
-                <td>Tecnologia</td>
-                <td className="score">92/100</td>
-                <td><span className="status complete">Completo</span></td>
-                <td>
-                  <div className="row-actions">
-                    <button className="btn-mini primary">📄 Relatório</button>
-                    <button className="btn-mini">⬇️ PDF</button>
-                    <button className="btn-mini">👁️ Ver</button>
-                    <button className="btn-mini">🔁 Reanalisar</button>
-                    <button className="btn-mini">📊 Comparar</button>
-                    <button className="btn-mini star">⭐ Favoritar</button>
-                    <button className="btn-mini danger">🗑️ Excluir</button>
-                  </div>
-                </td>
-              </tr>
-
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td>05/04/2026</td>
-                <td>curriculo_andre_v2.pdf</td>
-                <td>Estágio</td>
-                <td>Tecnologia</td>
-                <td className="score">85/100</td>
-                <td><span className="status complete">Completo</span></td>
-                <td>
-                  <div className="row-actions">
-                    <button className="btn-mini primary">📄 Relatório</button>
-                    <button className="btn-mini">⬇️ PDF</button>
-                    <button className="btn-mini">👁️ Ver</button>
-                    <button className="btn-mini">🔁 Reanalisar</button>
-                    <button className="btn-mini">📊 Comparar</button>
-                    <button className="btn-mini star">⭐ Favoritar</button>
-                    <button className="btn-mini danger">🗑️ Excluir</button>
-                  </div>
-                </td>
-              </tr>
-
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td>30/03/2026</td>
-                <td>curriculo_andre_v1.pdf</td>
-                <td>Estágio</td>
-                <td>Administração</td>
-                <td className="score">78/100</td>
-                <td><span className="status complete">Completo</span></td>
-                <td>
-                  <div className="row-actions">
-                    <button className="btn-mini primary">📄 Relatório</button>
-                    <button className="btn-mini">⬇️ PDF</button>
-                    <button className="btn-mini">👁️ Ver</button>
-                    <button className="btn-mini">🔁 Reanalisar</button>
-                    <button className="btn-mini">📊 Comparar</button>
-                    <button className="btn-mini star">⭐ Favoritar</button>
-                    <button className="btn-mini danger">🗑️ Excluir</button>
-                  </div>
-                </td>
-              </tr>
-
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td>20/03/2026</td>
-                <td>curriculo_teste.pdf</td>
-                <td>Júnior</td>
-                <td>Marketing</td>
-                <td className="score">70/100</td>
-                <td><span className="status processing">Em processamento</span></td>
-                <td>
-                  <div className="row-actions">
-                    <button className="btn-mini primary">📄 Relatório</button>
-                    <button className="btn-mini">⬇️ PDF</button>
-                    <button className="btn-mini">👁️ Ver</button>
-                    <button className="btn-mini">🔁 Reanalisar</button>
-                    <button className="btn-mini">📊 Comparar</button>
-                    <button className="btn-mini star">⭐ Favoritar</button>
-                    <button className="btn-mini danger">🗑️ Excluir</button>
-                  </div>
-                </td>
-              </tr>
-
-              <tr>
-                <td><input type="checkbox" /></td>
-                <td>10/03/2026</td>
-                <td>curriculo_incompleto.docx</td>
-                <td>Estágio</td>
-                <td>Tecnologia</td>
-                <td className="score">62/100</td>
-                <td><span className="status error">Erro</span></td>
-                <td>
-                  <div className="row-actions">
-                    <button className="btn-mini primary">📄 Relatório</button>
-                    <button className="btn-mini">⬇️ PDF</button>
-                    <button className="btn-mini">👁️ Ver</button>
-                    <button className="btn-mini">🔁 Reanalisar</button>
-                    <button className="btn-mini">📊 Comparar</button>
-                    <button className="btn-mini star">⭐ Favoritar</button>
-                    <button className="btn-mini danger">🗑️ Excluir</button>
-                  </div>
-                </td>
-              </tr>
-
-            </tbody>
-          </table>
-        </section>
-
       </main>
 
-      {/* FOOTER */}
-      <footer className="footer">
-        <div className="footer-container">
-
-          <div className="footer-brand">
-            <h2>TalentScan</h2>
-            <p>
-              Melhore seu currículo com inteligência artificial e
-              aumente suas chances no mercado.
-            </p>
-          </div>
-
-          <div className="footer-links">
-            <div>
-              <h4>Produto</h4>
-              <a href="#">Como funciona</a>
-              <a href="#">Funcionalidades</a>
-              <a href="#">Dashboard</a>
-            </div>
-
-            <div>
-              <h4>Empresa</h4>
-              <a href="#">Sobre</a>
-              <a href="#">Contato</a>
-            </div>
-
-            <div>
-              <h4>Legal</h4>
-              <a href="#">Privacidade</a>
-              <a href="#">Termos</a>
-            </div>
-          </div>
-
-        </div>
-
-        <div className="footer-bottom">
-          <p>© 2026 TalentScan. Todos os direitos reservados.</p>
-        </div>
-      </footer>
-
-    </div>
+      <Footer />
+    </>
   );
 }
 

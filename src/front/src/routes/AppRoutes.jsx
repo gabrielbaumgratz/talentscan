@@ -7,7 +7,6 @@ import Progress from "../pages/Progress";
 import ClassificacaoCompatibilidade from "../pages/ClassificacaoCompatibilidade";
 import Profile from "../pages/Profile";
 import Historico from "../pages/Historico";
-import AnalysisResult from "../pages/AnalysisResult";
 import CriadorCurriculo from "../pages/CriadorCurriculo"; // Import novo
 
 function AppRoutes() {
@@ -22,7 +21,6 @@ function AppRoutes() {
         <Route path="/classificacao-compatibilidade" element={<ClassificacaoCompatibilidade />} />
         <Route path="/profile" element={<Profile />} />
         <Route path="/historico" element={<Historico />} />
-        <Route path="/analise/:id" element={<AnalysisResult />} />
         <Route path="/criador-cv" element={<CriadorCurriculo />} /> {/* Rota nova */}
       </Routes>
     </Router>

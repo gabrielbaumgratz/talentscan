@@ -4,55 +4,33 @@ import { Eye, EyeOff } from "lucide-react";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import { loginUser } from "../services/authService";
+import { alertTheme } from "../lib";
 import Swal from "sweetalert2";
-import "./Login.css";
+import { Words } from "../components/ui";
+import "./Auth.css";
 
 function Login() {
   const navigate = useNavigate();
-
-  const [formData, setFormData] = useState({
-    email: "",
-    password: ""
-  });
-
+  const [formData, setFormData] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     try {
+      setLoading(true);
       const data = await loginUser(formData);
-
       localStorage.setItem("user", JSON.stringify(data.user));
-
-      await Swal.fire({
-        icon: "success",
-        title: "Login realizado!",
-        text: data.message,
-        confirmButtonColor: "#2563eb"
-      });
-
-      setFormData({
-        email: "",
-        password: ""
-      });
-
-      navigate("/");
-
+      navigate("/dashboard");
     } catch (err) {
-      Swal.fire({
-        icon: "error",
-        title: "Erro no login",
-        text: err.message,
-        confirmButtonColor: "#ef4444"
-      });
+      Swal.fire(alertTheme({ icon: "error", title: "Não deu pra entrar", text: err.message }));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -60,57 +38,39 @@ function Login() {
     <>
       <Navbar />
 
-      <section className="login-section">
-        <div className="login-box">
-
-          <h1>Login</h1>
-          <p className="subtitle">
-            Entre na sua conta para acessar o sistema
-          </p>
-
-          <form onSubmit={handleSubmit} className="login-form">
-
-            <div className="input-group">
-              <input
-                type="email"
-                name="email"
-                placeholder="Digite seu email"
-                value={formData.email}
-                onChange={handleChange}
-              />
-            </div>
-
-            <div className="input-password">
-              <input
-                type={showPassword ? "text" : "password"}
-                name="password"
-                placeholder="Digite sua senha"
-                value={formData.password}
-                onChange={handleChange}
-              />
-
-              <button
-                type="button"
-                className="eye-btn"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-
-            <button type="submit" className="login-btn">
-              Entrar
-            </button>
-
-          </form>
-
-          <p className="register-link">
-            Ainda não possui conta?{" "}
-            <Link to="/register">Cadastre-se</Link>
-          </p>
-
+      <main className="auth">
+        <div className="auth-title">
+          <Words text="Entrar" />
+          <p>Volte para o seu histórico de análises.</p>
         </div>
-      </section>
+
+        <form onSubmit={handleSubmit} className="auth-form">
+          <div className="field">
+            <label htmlFor="email">Email</label>
+            <input id="email" type="email" name="email" autoComplete="email" required
+              value={formData.email} onChange={handleChange} />
+          </div>
+
+          <div className="field pw">
+            <label htmlFor="password">Senha</label>
+            <input id="password" type={showPassword ? "text" : "password"} name="password"
+              autoComplete="current-password" required
+              value={formData.password} onChange={handleChange} />
+            <button type="button" className="eye" onClick={() => setShowPassword(!showPassword)}
+              aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}>
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
+
+          <button type="submit" className="btn" disabled={loading}>
+            {loading ? "Entrando..." : "Entrar"}
+          </button>
+
+          <p className="auth-alt">
+            Ainda não tem conta? <Link to="/register">Criar conta</Link>
+          </p>
+        </form>
+      </main>
 
       <Footer />
     </>
