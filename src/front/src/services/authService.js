@@ -1,23 +1,8 @@
 import API_URL from "./api";
+import { readJson } from "./http";
 
-const parseResponse = async (response, fallbackMessage) => {
-  const contentType = response.headers.get("content-type") || "";
-  const rawText = await response.text();
-
-  if (!contentType.includes("application/json")) {
-    throw new Error(
-      "A API nao retornou JSON. Reinicie o backend para carregar as novas rotas."
-    );
-  }
-
-  const data = JSON.parse(rawText);
-
-  if (!response.ok) {
-    throw new Error(data.message || fallbackMessage);
-  }
-
-  return data;
-};
+const parseResponse = async (response, fallbackMessage) =>
+  readJson(response, fallbackMessage);
 
 export const registerUser = async (userData) => {
   const response = await fetch(`${API_URL}/api/auth/register`, {

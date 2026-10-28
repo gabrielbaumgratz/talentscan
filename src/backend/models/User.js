@@ -9,7 +9,9 @@ const userSchema = new mongoose.Schema({
   email: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+    lowercase: true,
+    trim: true
   },
 
   phone: {
@@ -27,6 +29,20 @@ const userSchema = new mongoose.Schema({
     default: Date.now
   }
 
+});
+
+userSchema.set("toJSON", {
+  transform: (doc, ret) => {
+    delete ret.password;
+    return ret;
+  }
+});
+
+userSchema.set("toJSON", {
+  transform: (doc, ret) => {
+    delete ret.password;
+    return ret;
+  }
 });
 
 module.exports = mongoose.model("User", userSchema);

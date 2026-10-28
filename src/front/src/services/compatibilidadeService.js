@@ -1,13 +1,24 @@
 import API_URL from "./api";
+import { readJson } from "./http";
+
+const postJson = async (path, payload, fallback) => {
+  const res = await fetch(`${API_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  return readJson(res, fallback);
+};
 
 export async function buscarCurriculos(userId) {
   const res = await fetch(`${API_URL}/api/analises/${userId}`);
-  return res.json();
+  return readJson(res, "Erro ao buscar currículos");
 }
 
 export async function buscarClassificacoes(userId) {
   const res = await fetch(`${API_URL}/api/classificacao/historico/${userId}`);
-  return res.json();
+  return readJson(res, "Erro ao buscar classificações");
 }
 
 export async function analisarClassificacao(formData) {
@@ -16,25 +27,13 @@ export async function analisarClassificacao(formData) {
     body: formData
   });
 
-  return res.json();
+  return readJson(res, "Erro ao classificar currículo");
 }
 
 export async function gerarVaga(payload) {
-  const res = await fetch(`${API_URL}/api/vagas/gerar`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-
-  return res.json();
+  return postJson("/api/vagas/gerar", payload, "Erro ao gerar vaga");
 }
 
 export async function analisarCompatibilidade(payload) {
-  const res = await fetch(`${API_URL}/api/compatibilidade/analisar`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-
-  return res.json();
+  return postJson("/api/compatibilidade/analisar", payload, "Erro ao analisar compatibilidade");
 }

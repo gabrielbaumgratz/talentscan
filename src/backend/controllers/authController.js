@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const { hashPassword, verifyPassword, isHashed } = require("../utils/password");
 
 /*
 REGISTRAR USUÁRIO POST /api/auth/register 
@@ -6,6 +7,12 @@ REGISTRAR USUÁRIO POST /api/auth/register
 const register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        message: "Preencha nome, email e senha"
+      });
+    }
 
     // verifica se já existe usuário com esse email
     const existingUser = await User.findOne({ email });
@@ -20,7 +27,7 @@ const register = async (req, res) => {
     const newUser = await User.create({
       name,
       email,
-      password
+      password: hashPassword(password)
     });
 
     res.status(201).json({
@@ -56,10 +63,15 @@ const login = async (req, res) => {
     }
 
     // verifica senha
-    if (user.password !== password) {
+    if (!verifyPassword(password, user.password)) {
       return res.status(400).json({
         message: "Senha incorreta"
       });
+    }
+
+    if (!isHashed(user.password)) {
+      user.password = hashPassword(password);
+      await user.save();
     }
 
     res.json({
@@ -167,7 +179,7 @@ const updatePassword = async (req, res) => {
       });
     }
 
-    if (user.password !== currentPassword) {
+    if (!verifyPassword(currentPassword, user.password)) {
       return res.status(400).json({
         message: "Senha atual incorreta"
       });
@@ -185,7 +197,7 @@ const updatePassword = async (req, res) => {
       });
     }
 
-    user.password = newPassword;
+    user.password = hashPassword(newPassword);
 
     await user.save();
 
